@@ -3,7 +3,7 @@
     unique_key='pk_hash',
     cluster_by=['customer_id'],
     tags=['mart', 'customer', 'final'],
-    post_hook="{{ handle_hard_deletes(this, ref('customer_driver'), 'pk_hash') }}"
+    post_hook="{{ handle_hard_deletes(this, source('ods_in_customer', 'customer'), 'pk_hash') }}"
 ) }}
 
 WITH customer_driver AS (

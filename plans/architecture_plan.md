@@ -87,7 +87,6 @@ ods_dk_dbt/
 ├── dbt_project/
 │   ├── dbt_project.yml
 │   ├── profiles.yml
-│   ├── packages.yml                  # dbt-utils package
 │   ├── models/
 │   │   ├── sources/                  # Source definitions organized by domain
 │   │   │   ├── _sources.yml          # Main source config (database, schema)
@@ -103,7 +102,8 @@ ods_dk_dbt/
 │   │           ├── contract_consolidated.sql
 │   │           └── contract_summary.sql
 │   ├── macros/
-│   │   └── scd/                      # SCD and delete detection macros
+│   │   ├── scd/                      # SCD and delete detection macros
+│   │   └── utils/                    # Helper macros (generate_surrogate_key, current_timestamp)
 │   └── tests/
 │       └── generic/
 ├── config/
@@ -413,7 +413,7 @@ flowchart TB
     UPDATE {{ target_table }}
     SET 
         fl_deleted = 1,
-        deleted_at = {{ dbt_utils.current_timestamp() }}
+        deleted_at = {{ current_timestamp() }}
     WHERE {{ pk_column }} NOT IN (
         SELECT {{ pk_column }} FROM {{ driver_source }}
     )
@@ -493,7 +493,7 @@ final AS (
         -- Primary key from DRIVER table
         c.pk_hash,
         -- Row hash for change detection
-        {{ dbt_utils.generate_surrogate_key([
+        {{ generate_surrogate_key([
             'c.customer_id', 'c.customer_name', 'c.customer_type',
             'c.registration_date', 'c.status', 'a.street_address',
             'a.city', 'a.postal_code', 'a.country', 'e.email_address',
@@ -519,7 +519,7 @@ final AS (
         c.fl_deleted,
         NULL::TIMESTAMP AS deleted_at,
         -- Metadata
-        {{ dbt_utils.current_timestamp() }} AS loaded_at,
+        {{ current_timestamp() }} AS loaded_at,
         'DK' AS market_code
     FROM customer_driver c
     -- LEFT JOINs: Missing enrichment data = NULL columns, NOT deletion
@@ -588,7 +588,7 @@ WITH contract_driver AS (
 final AS (
     SELECT
         pk_hash,
-        {{ dbt_utils.generate_surrogate_key([
+        {{ generate_surrogate_key([
             'contract_id', 'customer_id', 'contract_type',
             'contract_start_date', 'contract_end_date', 'contract_value', 'status'
         ]) }} AS row_hash,
@@ -603,7 +603,7 @@ final AS (
         CASE WHEN contract_end_date >= CURRENT_DATE() AND status = 'ACTIVE' THEN 1 ELSE 0 END AS is_active,
         fl_deleted,
         NULL::TIMESTAMP AS deleted_at,
-        {{ dbt_utils.current_timestamp() }} AS loaded_at,
+        {{ current_timestamp() }} AS loaded_at,
         'DK' AS market_code
     FROM contract_driver
     {% if is_incremental() %}
@@ -628,7 +628,7 @@ SELECT * FROM final
     UPDATE {{ target_table }}
     SET 
         fl_deleted = 1,
-        deleted_at = {{ dbt_utils.current_timestamp() }}
+        deleted_at = {{ current_timestamp() }}
     WHERE pk_hash NOT IN (
         SELECT pk_hash FROM {{ source('ods_in_contract', 'insurance_contract') }}
         UNION
@@ -767,7 +767,7 @@ summary AS (
         customer_type,
         status,
         COUNT(*) OVER (PARTITION BY customer_type, status) AS customers_in_segment,
-        {{ dbt_utils.current_timestamp() }} AS loaded_at
+        {{ current_timestamp() }} AS loaded_at
     FROM customers
 )
 
@@ -800,7 +800,7 @@ summary AS (
         MIN(contract_start_date) AS earliest_contract_date,
         MAX(contract_end_date) AS latest_contract_end_date,
         SUM(CASE WHEN is_active THEN 1 ELSE 0 END) AS active_contracts,
-        {{ dbt_utils.current_timestamp() }} AS loaded_at
+        {{ current_timestamp() }} AS loaded_at
     FROM contracts
     GROUP BY customer_id, market_code, contract_type, status
 )
@@ -841,23 +841,15 @@ models:
         description: "Total contract value"
         tests:
           - not_null
-          - dbt_utils.accepted_range:
-              min_value: 0
-              max_value: 100000000
       - name: contract_start_date
         tests:
           - not_null
       - name: contract_end_date
-        tests:
-          - dbt_utils.expression_is_true:
-              expression: ">= contract_start_date"
               
   - name: contract_summary
     tests:
-      - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - customer_id
-            - status_code
+      - unique:
+          column_name: customer_id
 ```
 
 ### Custom Tests
