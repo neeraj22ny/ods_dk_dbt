@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: customer_consolidated
+    description: "Consolidated customer data from all customer source tables"
+    columns:
+      - name: pk_hash
+        tests:
+          - unique
+          - not_null
+      - name: row_hash
+      - name: customer_id
+        tests:
+          - not_null
+      - name: customer_name
+      - name: customer_type
+      - name: registration_date
+      - name: status
+      - name: street_address
+      - name: city
+      - name: postal_code
+      - name: country
+      - name: email_address
+      - name: phone_number
+      - name: date_of_birth
+      - name: national_id
+      - name: gender
+      - name: fl_deleted
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+      - name: deleted_at
+      - name: loaded_at
+      - name: market_code
+        
+  - name: customer_summary
+    description: "Aggregated customer metrics by customer type and status"
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+      - name: market_code
+      - name: customer_type
+      - name: status
+      - name: customers_in_segment
+        tests:
+          - not_null
+      - name: loaded_at

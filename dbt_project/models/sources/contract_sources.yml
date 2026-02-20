@@ -1,0 +1,103 @@
+version: 2
+
+sources:
+  - name: ods_in_contract
+    description: "Contract domain tables from ODS IN staging"
+    database: "ODS_DK_IN"
+    schema: "STAGING"
+    
+    tables:
+      - name: insurance_contract
+        description: "Insurance contract data"
+        columns:
+          - name: pk_hash
+            tests:
+              - unique
+              - not_null
+          - name: row_hash
+          - name: contract_id
+          - name: customer_id
+          - name: contract_start_date
+          - name: contract_end_date
+          - name: contract_value
+          - name: premium_amount
+          - name: coverage_type
+          - name: status
+          - name: fl_deleted
+          - name: loaded_at
+      
+      - name: vehicle_contract
+        description: "Vehicle contract data"
+        columns:
+          - name: pk_hash
+            tests:
+              - unique
+              - not_null
+          - name: row_hash
+          - name: contract_id
+          - name: customer_id
+          - name: contract_start_date
+          - name: contract_end_date
+          - name: contract_value
+          - name: monthly_payment
+          - name: vehicle_type
+          - name: status
+          - name: fl_deleted
+          - name: loaded_at
+      
+      - name: service_contract
+        description: "Service contract data"
+        columns:
+          - name: pk_hash
+            tests:
+              - unique
+              - not_null
+          - name: row_hash
+          - name: contract_id
+          - name: customer_id
+          - name: contract_start_date
+          - name: contract_end_date
+          - name: contract_value
+          - name: service_fee
+          - name: service_type
+          - name: status
+          - name: fl_deleted
+          - name: loaded_at
+      
+      - name: retail_finance
+        description: "Retail finance contract data"
+        columns:
+          - name: pk_hash
+            tests:
+              - unique
+              - not_null
+          - name: row_hash
+          - name: contract_id
+          - name: customer_id
+          - name: contract_start_date
+          - name: contract_end_date
+          - name: contract_value
+          - name: interest_rate
+          - name: loan_term_months
+          - name: status
+          - name: fl_deleted
+          - name: loaded_at
+      
+      - name: commercial_finance
+        description: "Commercial finance contract data"
+        columns:
+          - name: pk_hash
+            tests:
+              - unique
+              - not_null
+          - name: row_hash
+          - name: contract_id
+          - name: customer_id
+          - name: contract_start_date
+          - name: contract_end_date
+          - name: contract_value
+          - name: interest_rate
+          - name: facility_limit
+          - name: status
+          - name: fl_deleted
+          - name: loaded_at

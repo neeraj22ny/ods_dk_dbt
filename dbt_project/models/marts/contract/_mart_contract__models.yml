@@ -1,0 +1,71 @@
+version: 2
+
+models:
+  - name: contract_consolidated
+    description: "Consolidated contract data from all contract source tables"
+    columns:
+      - name: pk_hash
+        tests:
+          - unique
+          - not_null
+      - name: row_hash
+      - name: contract_id
+        tests:
+          - not_null
+      - name: customer_id
+        tests:
+          - not_null
+      - name: contract_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['INSURANCE', 'VEHICLE', 'SERVICE', 'RETAIL_FINANCE', 'COMMERCIAL_FINANCE']
+      - name: contract_start_date
+        tests:
+          - not_null
+      - name: contract_end_date
+      - name: contract_duration_days
+      - name: contract_value
+        tests:
+          - not_null
+      - name: status
+      - name: is_active
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+      - name: specific_value_1
+      - name: specific_value_2
+      - name: specific_value_3
+      - name: fl_deleted
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+      - name: deleted_at
+      - name: loaded_at
+      - name: market_code
+        
+  - name: contract_summary
+    description: "Aggregated contract metrics by customer, contract type, and status"
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+      - name: market_code
+      - name: contract_type
+        tests:
+          - accepted_values:
+              values: ['INSURANCE', 'VEHICLE', 'SERVICE', 'RETAIL_FINANCE', 'COMMERCIAL_FINANCE']
+      - name: status
+      - name: total_contracts
+        tests:
+          - not_null
+      - name: total_value
+      - name: avg_duration_days
+      - name: earliest_contract_date
+      - name: latest_contract_end_date
+      - name: active_contracts
+        tests:
+          - not_null
+      - name: loaded_at

@@ -1,0 +1,18 @@
+version: 2
+
+sources:
+  - name: ods_in
+    description: "ODS IN - Operational Data Store staging database"
+    database: "ODS_DK_IN"
+    schema: "STAGING"
+    loader: "Informatica"
+    
+    loaded_at_field: "loaded_at"
+    freshness:
+      warn_after: {count: 12, period: hour}
+      error_after: {count: 24, period: hour}
+    
+    quoting:
+      database: false
+      schema: false
+      identifier: false

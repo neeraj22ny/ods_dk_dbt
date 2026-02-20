@@ -1,0 +1,95 @@
+version: 2
+
+sources:
+  - name: ods_in_customer
+    description: "Customer domain tables from ODS IN staging"
+    database: "ODS_DK_IN"
+    schema: "STAGING"
+    
+    tables:
+      - name: customer
+        description: "Core customer data"
+        columns:
+          - name: pk_hash
+            tests:
+              - unique
+              - not_null
+          - name: row_hash
+          - name: customer_id
+          - name: customer_name
+          - name: customer_type
+          - name: registration_date
+          - name: status
+          - name: fl_deleted
+          - name: loaded_at
+        tests:
+          - not_null
+      
+      - name: address
+        description: "Customer address information"
+        columns:
+          - name: pk_hash
+            tests:
+              - unique
+              - not_null
+          - name: row_hash
+          - name: address_id
+          - name: customer_id
+          - name: address_type
+          - name: street_address
+          - name: city
+          - name: postal_code
+          - name: country
+          - name: is_primary
+          - name: is_active
+          - name: fl_deleted
+          - name: loaded_at
+      
+      - name: email
+        description: "Customer email addresses"
+        columns:
+          - name: pk_hash
+            tests:
+              - unique
+              - not_null
+          - name: row_hash
+          - name: email_id
+          - name: customer_id
+          - name: email_address
+          - name: email_type
+          - name: is_primary
+          - name: is_active
+          - name: fl_deleted
+          - name: loaded_at
+      
+      - name: phone
+        description: "Customer phone numbers"
+        columns:
+          - name: pk_hash
+            tests:
+              - unique
+              - not_null
+          - name: row_hash
+          - name: phone_id
+          - name: customer_id
+          - name: phone_number
+          - name: phone_type
+          - name: is_primary
+          - name: is_active
+          - name: fl_deleted
+          - name: loaded_at
+      
+      - name: personal_information
+        description: "Customer personal details"
+        columns:
+          - name: pk_hash
+            tests:
+              - unique
+              - not_null
+          - name: row_hash
+          - name: customer_id
+          - name: date_of_birth
+          - name: national_id
+          - name: gender
+          - name: fl_deleted
+          - name: loaded_at

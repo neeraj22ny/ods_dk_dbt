@@ -1,0 +1,29 @@
+market:
+  code: "DK"
+  name: "Denmark"
+  timezone: "Europe/Copenhagen"
+  currency: "DKK"
+  language: "da"
+
+source:
+  database: "ODS_DK_IN"
+  schema: "STAGING"
+  
+target:
+  database: "ODS_DK_OUT"
+  schema: "MARTS"
+
+business_rules:
+  date_format: "DD-MM-YYYY"
+  vat_rate: 0.25
+  working_days: [1, 2, 3, 4, 5]
+  fiscal_year_start: 1
+
+data_quality:
+  freshness_warning_hours: 12
+  freshness_error_hours: 24
+  test_severity: "warn"
+
+table_prefixes:
+  customer: "CUS"
+  contract: "CTR"

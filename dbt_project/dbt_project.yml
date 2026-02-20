@@ -1,0 +1,53 @@
+name: 'ods_dk_dbt'
+version: '1.0.0'
+config-version: 2
+
+profile: 'ods_dk_dbt'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  market_code: "DK"
+  source_database: "ods_eu_dev"
+  source_schema: "ODS_DK_IN"
+  target_database: "ods_eu_dev"
+  target_schema: "ODS_DK_OUT"
+
+models:
+  ods_dk_dbt:
+    +materialized: view
+    
+    sources:
+      +tags: ['source']
+    
+    marts:
+      +materialized: incremental
+      +tags: ['mart']
+      +database: "ods_eu_dev"
+      +schema: "ODS_DK_OUT"
+      
+      customer:
+        +tags: ['customer']
+      
+      contract:
+        +tags: ['contract']
+
+tests:
+  ods_dk_dbt:
+    +severity: warn
+
+flags:
+  log_format: text
+  use_colors: true
+  warn_error: false
+  print: true
