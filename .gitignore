@@ -6,6 +6,9 @@ dbt_project/dbt_packages/
 dbt_project/logs/
 *.log
 
+# DBT Docs - exclude from main gitignore so we can publish to GitHub Pages
+# docs/ folder is for GitHub Pages documentation
+
 # Python
 __pycache__/
 *.py[cod]
