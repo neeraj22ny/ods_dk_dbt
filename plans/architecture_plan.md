@@ -7,7 +7,7 @@ This document outlines the architecture for the ODS DK (Operational Data Store D
 ## Project Overview
 
 ### Business Context
-- **Source System**: ODS IN (existing staging tables in Snowflake)
+- **Source System**: ODS IN (existing source tables in Snowflake)
 - **Target System**: ODS OUT with 4 final models
 - **Transformation**: SCD Type 1 (overwrite) with soft delete handling
 - **Processing**: Daily ETL pipeline at 6 AM UTC
@@ -17,7 +17,7 @@ This document outlines the architecture for the ODS DK (Operational Data Store D
 
 ```mermaid
 flowchart TB
-    subgraph Sources[ODS IN - Existing Staging Tables]
+    subgraph Sources[ODS IN - Source Tables]
         direction TB
         subgraph CustomerSources[Customer Domain Tables]
             CUST[customer]
@@ -53,7 +53,7 @@ flowchart TB
 
 1. **Single Market Focus**: DK (Denmark) only
 2. **SCD Type 1**: Overwrite strategy for all tables (no historical tracking)
-3. **No Intermediate Layer**: Direct transformation from ODS IN staging to ODS OUT marts
+3. **No Intermediate Layer**: Direct transformation from ODS IN to ODS OUT marts
 4. **4 Output Models**: 
    - CUSTOMER_CONSOLIDATED (joined from customer, address, email, phone, personal_information)
    - CUSTOMER_SUMMARY (aggregated customer metrics)
@@ -72,9 +72,8 @@ Following DBT best practices with three distinct layers:
 
 | Layer | Purpose | Naming Convention |
 |-------|---------|-------------------|
-| Staging | Source data selection, renaming, type casting | `stg_<source>_<entity>` |
-| Intermediate | Business logic, joins, transformations | `int_<domain>_<entity>` |
-| Mart | Final business-ready tables | `<domain>_<entity>` |
+| Sources | Source data definitions | Source tables in ODS_DK_IN |
+| Mart | Final business-ready tables | Tables in ODS_DK_OUT |
 
 ### 3. Reusable Components
 - Generic macros for common transformations
@@ -132,9 +131,9 @@ version: 2
 
 sources:
   - name: ods_in
-    description: "ODS IN staging database"
-    database: "ODS_DK_IN"
-    schema: "STAGING"
+    description: "ODS IN source database"
+    database: "ods_eu_dev"
+    schema: "ODS_DK_IN"
     loader: "Fivetran/Snowflake"
     
     # Default freshness for all tables
@@ -700,7 +699,7 @@ table_prefixes:
 
 ### Source Configuration
 
-**Purpose**: Define existing ODS IN staging tables as DBT sources
+**Purpose**: Define existing ODS IN source tables as DBT sources
 
 **Example Source Definition**:
 ```yaml
@@ -709,9 +708,9 @@ version: 2
 
 sources:
   - name: ods_in
-    description: "ODS IN staging tables"
-    database: "ODS_DK_IN"
-    schema: "STAGING"
+    description: "ODS IN source tables"
+    database: "ods_eu_dev"
+    schema: "ODS_DK_IN"
     tables:
       # Customer domain tables
       - name: customer
@@ -937,9 +936,8 @@ flowchart LR
 
 1. **Clustering Keys**: Use clustering on frequently queried columns
 2. **Materialization Strategy**: 
-   - Views for staging (lightweight)
-   - Incremental for intermediate (efficient updates)
-   - Tables for marts (query performance)
+   - Incremental for marts (efficient updates)
+   - Tables for summary models (query performance)
 3. **Query Optimization**: Use CTEs effectively, avoid SELECT *
 4. **Partitioning**: Consider time-based partitioning for large tables
 

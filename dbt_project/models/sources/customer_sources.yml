@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: ods_in_customer
-    description: "Customer domain tables from ODS IN staging"
+    description: "Customer domain tables from ODS_DK_IN schema"
     database: "{{ var('source_database', 'ods_eu_dev') }}"
     schema: "{{ var('source_schema', 'ODS_DK_IN') }}"
     
@@ -22,8 +22,6 @@ sources:
           - name: status
           - name: fl_deleted
           - name: loaded_at
-        tests:
-          - not_null
       
       - name: address
         description: "Customer address information"

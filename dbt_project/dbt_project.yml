@@ -25,7 +25,7 @@ vars:
 
 models:
   ods_dk_dbt:
-    +materialized: view
+    +materialized: table
     
     sources:
       +tags: ['source']

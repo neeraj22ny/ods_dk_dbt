@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: ods_in
-    description: "ODS IN - Operational Data Store staging database"
+    description: "ODS IN - Source tables from ODS_DK_IN schema"
     database: "{{ var('source_database', 'ods_eu_dev') }}"
     schema: "{{ var('source_schema', 'ODS_DK_IN') }}"
     loader: "Informatica"
