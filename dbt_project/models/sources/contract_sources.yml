@@ -3,8 +3,8 @@ version: 2
 sources:
   - name: ods_in_contract
     description: "Contract domain tables from ODS IN staging"
-    database: "ODS_DK_IN"
-    schema: "STAGING"
+    database: "{{ var('source_database', 'ods_eu_dev') }}"
+    schema: "{{ var('source_schema', 'ODS_DK_IN') }}"
     
     tables:
       - name: insurance_contract

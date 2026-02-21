@@ -3,8 +3,8 @@ version: 2
 sources:
   - name: ods_in
     description: "ODS IN - Operational Data Store staging database"
-    database: "ODS_DK_IN"
-    schema: "STAGING"
+    database: "{{ var('source_database', 'ods_eu_dev') }}"
+    schema: "{{ var('source_schema', 'ODS_DK_IN') }}"
     loader: "Informatica"
     
     loaded_at_field: "loaded_at"
