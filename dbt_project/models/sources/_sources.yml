@@ -25,7 +25,6 @@ sources:
     database: "{{ var('source_database', 'ods_eu_dev') }}"
     schema: "{{ var('source_schema', 'ODS_DK_IN') }}"
     loader: Informatica IDMC
-    loader_display_name: Informatica Intelligent Data Management Cloud
     
     loaded_at_field: loaded_at
     freshness:
