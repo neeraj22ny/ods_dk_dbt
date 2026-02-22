@@ -2,48 +2,444 @@ version: 2
 
 models:
   - name: customer_consolidated
-    description: "Consolidated customer data from all customer source tables"
+    description: |
+      ## Customer Consolidated Model
+      
+      Comprehensive customer view combining master data with contact information and personal details.
+      This is the primary customer table for downstream analytics and campaign targeting.
+      
+      ### Business Purpose
+      - Customer 360 view for analytics and reporting
+      - Campaign targeting and segmentation
+      - Customer onboarding verification
+      - Regulatory reporting (GDPR compliance)
+      
+      ### Architecture Layer
+      **ODS_DK_OUT** - Transformed data layer for downstream consumption
+      
+      ### Transformation Logic
+      1. **Driver Table**: customer (determines record existence)
+      2. **Enrichment Tables**: address, email, phone, personal_information (LEFT JOINed)
+      3. **Deduplication**: Primary address/email/phone selected using ROW_NUMBER() by is_primary
+      4. **Change Detection**: row_hash comparison for incremental updates
+      
+      ### Standardization Rules
+      - customer_name: Trimmed, uppercase
+      - email_address: Lowercase, trimmed
+      - phone_number: E.164 format
+      - All dates: DATE type, validated
+      
+      ### Filtering Criteria
+      - Only non-deleted records (fl_deleted = 0) for active customers
+      - Only active contact information (is_active = TRUE)
+      - Primary contact selected by is_primary flag
+      
+      ### Refresh Cadence
+      Daily at 20:00 CET (incremental load)
+      
+      ### Downstream Consumers
+      - Campaign Management System
+      - Customer Onboarding Application
+      - CRM Integration Layer
+      - Regulatory Reporting Platform
+      
+      ### Data Lineage
+      ```
+      ODS_DK_IN.customer → customer_consolidated
+      ODS_DK_IN.address → customer_consolidated
+      ODS_DK_IN.email → customer_consolidated
+      ODS_DK_IN.phone → customer_consolidated
+      ODS_DK_IN.personal_information → customer_consolidated
+      ```
+      
+    config:
+      tags: ['mart', 'customer', 'final', 'ods_dk_out', 'marketing_domain']
+      materialized: incremental
+      unique_key: pk_hash
+      cluster_by: ['customer_id']
+      
+    meta:
+      owner: denmark_data_team
+      steward: customer_domain_team
+      domain: customer
+      market: DK
+      architectural_layer: ods_dk_out
+      pii_contains: true
+      gdpr_scope: true
+      retention_years: 7
+      refresh_cadence: "daily_20:00_CET"
+      data_classification: confidential
+      sla_hours: 4
+      criticality: high
+      downstream_consumers: "Campaign Management, Customer Onboarding, CRM"
+      
     columns:
       - name: pk_hash
+        description: |
+          **Primary Key - Surrogate Key Hash**
+          
+          MD5 hash of customer_id, used as the primary key for the customer entity.
+          Ensures consistent identification across incremental loads.
+        data_type: VARCHAR(32)
         tests:
           - unique
           - not_null
+        meta:
+          is_primary_key: true
+          key_type: PK
+          pii: false
+          derivation: MD5_HASH
+          source_columns: customer_id
+          
       - name: row_hash
+        description: |
+          **Row Hash for Change Detection**
+          
+          MD5 hash of all business columns used to detect data changes.
+          When row_hash differs from existing record, the record is updated.
+        data_type: VARCHAR(32)
+        meta:
+          is_primary_key: false
+          pii: false
+          derivation: MD5_HASH
+          purpose: change_detection
+          source_columns: "customer_id, customer_name, customer_type, registration_date, status, street_address, city, postal_code, country, email_address, phone_number, date_of_birth, national_id, gender"
+          
       - name: customer_id
+        description: |
+          **Business Key - Customer Identifier**
+          
+          Unique identifier assigned by the source CRM system.
+          Used as the natural key for customer entity resolution.
+        data_type: VARCHAR(20)
         tests:
           - not_null
+          - unique
+        meta:
+          is_business_key: true
+          key_type: BK
+          pii: false
+          source_system: CRM
+          
       - name: customer_name
+        description: |
+          **Customer Full Name - PII**
+          
+          Full name of the customer (individual or company).
+          Standardized to uppercase during transformation.
+        data_type: VARCHAR(200)
+        meta:
+          pii: true
+          pii_classification: direct_identifier
+          data_classification: confidential
+          standardization: uppercase_trim
+          
       - name: customer_type
-      - name: registration_date
-      - name: status
-      - name: street_address
-      - name: city
-      - name: postal_code
-      - name: country
-      - name: email_address
-      - name: phone_number
-      - name: date_of_birth
-      - name: national_id
-      - name: gender
-      - name: fl_deleted
+        description: |
+          **Customer Category**
+          
+          Classification of customer type for segmentation purposes.
+          
+          | Value | Description |
+          |-------|-------------|
+          | INDIVIDUAL | Personal customer |
+          | CORPORATE | Business customer |
+          | SMALL_BUSINESS | Small business customer |
+        data_type: VARCHAR(20)
         tests:
-          - not_null
+          - accepted_values:
+              values: ['INDIVIDUAL', 'CORPORATE', 'SMALL_BUSINESS']
+        meta:
+          pii: false
+          accepted_values: INDIVIDUAL, CORPORATE, SMALL_BUSINESS
+          
+      - name: registration_date
+        description: |
+          **Customer Registration Date**
+          
+          Date when the customer was registered in the system.
+          Used for customer tenure calculations and cohort analysis.
+        data_type: DATE
+        meta:
+          pii: false
+          derivation: source_system
+          
+      - name: status
+        description: |
+          **Customer Status**
+          
+          Current status of the customer account.
+          
+          | Value | Description |
+          |-------|-------------|
+          | ACTIVE | Active customer |
+          | INACTIVE | Inactive customer |
+          | SUSPENDED | Suspended account |
+          | PENDING | Pending activation |
+        data_type: VARCHAR(20)
+        tests:
+          - accepted_values:
+              values: ['ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING']
+        meta:
+          pii: false
+          accepted_values: ACTIVE, INACTIVE, SUSPENDED, PENDING
+          
+      - name: street_address
+        description: |
+          **Street Address - PII**
+          
+          Primary street address of the customer.
+          Selected from address table where is_primary = TRUE.
+        data_type: VARCHAR(200)
+        meta:
+          pii: true
+          pii_classification: direct_identifier
+          data_classification: confidential
+          
+      - name: city
+        description: City name from primary address
+        data_type: VARCHAR(100)
+        meta:
+          pii: false
+          
+      - name: postal_code
+        description: Postal/ZIP code from primary address
+        data_type: VARCHAR(20)
+        meta:
+          pii: false
+          
+      - name: country
+        description: Country code (ISO 3166-1 alpha-2) from primary address
+        data_type: VARCHAR(2)
+        meta:
+          pii: false
+          
+      - name: email_address
+        description: |
+          **Email Address - PII**
+          
+          Primary email address of the customer.
+          Selected from email table where is_primary = TRUE.
+          Classified as direct identifier under GDPR.
+        data_type: VARCHAR(255)
+        meta:
+          pii: true
+          pii_classification: direct_identifier
+          data_classification: confidential
+          standardization: lowercase_trim
+          
+      - name: phone_number
+        description: |
+          **Phone Number - PII**
+          
+          Primary phone number of the customer in E.164 format.
+          Selected from phone table where is_primary = TRUE.
+          Classified as direct identifier under GDPR.
+        data_type: VARCHAR(20)
+        meta:
+          pii: true
+          pii_classification: direct_identifier
+          data_classification: confidential
+          
+      - name: date_of_birth
+        description: |
+          **Date of Birth - Sensitive PII**
+          
+          Customer date of birth for age verification.
+          Used for age-based product eligibility and marketing compliance.
+        data_type: DATE
+        meta:
+          pii: true
+          pii_classification: sensitive
+          data_classification: restricted
+          
+      - name: national_id
+        description: |
+          **National ID - Sensitive PII**
+          
+          Danish CPR number (Civil Registration Number).
+          Used for identity verification and regulatory reporting.
+          
+          **Handling Requirements:**
+          - Never expose in reports or dashboards
+          - Mask in non-production environments
+          - Encrypt in transit and at rest
+        data_type: VARCHAR(20)
+        meta:
+          pii: true
+          pii_classification: sensitive
+          data_classification: restricted
+          masking_required: true
+          
+      - name: gender
+        description: |
+          Gender classification
+          
+          | Value | Description |
+          |-------|-------------|
+          | M | Male |
+          | F | Female |
+          | U | Unknown/Not specified |
+        data_type: VARCHAR(1)
+        tests:
+          - accepted_values:
+              values: ['M', 'F', 'U']
+        meta:
+          pii: false
+          
+      - name: fl_deleted
+        description: |
+          **Soft Delete Flag**
+          
+          Binary flag indicating whether the record has been soft deleted.
+          - 0 = Active record
+          - 1 = Deleted record
+          
+          Updated by hard delete detection macro when source record is removed.
+        data_type: NUMBER(1,0)
+        tests:
           - accepted_values:
               values: [0, 1]
+        meta:
+          pii: false
+          accepted_values: "0 (active), 1 (deleted)"
+          purpose: soft_delete_tracking
+          
       - name: deleted_at
+        description: |
+          **Deletion Timestamp**
+          
+          Timestamp when the record was marked as deleted.
+          NULL for active records.
+        data_type: TIMESTAMP_NTZ
+        meta:
+          pii: false
+          purpose: audit_trail
+          
       - name: loaded_at
+        description: |
+          **Load Timestamp**
+          
+          Timestamp when the record was loaded/updated in this model.
+          Used for freshness monitoring and incremental processing.
+        data_type: TIMESTAMP_NTZ
+        tests:
+          - not_null
+        meta:
+          pii: false
+          purpose: freshness_tracking
+          
       - name: market_code
-        
+        description: |
+          **Market Code**
+          
+          Identifier for the market/region.
+          Fixed value 'DK' for Denmark market.
+        data_type: VARCHAR(2)
+        tests:
+          - accepted_values:
+              values: ['DK']
+        meta:
+          pii: false
+          
+    tests:
+      - relationships:
+          column_name: customer_id
+          to: source('ods_in_customer', 'customer')
+          field: customer_id
+          
   - name: customer_summary
-    description: "Aggregated customer metrics by customer type and status"
+    description: |
+      ## Customer Summary Model
+      
+      Aggregated customer metrics for reporting and analytics.
+      Provides customer counts by segment for business intelligence.
+      
+      ### Business Purpose
+      - Customer segmentation reporting
+      - Campaign targeting analysis
+      - Executive dashboards
+      - KPI monitoring
+      
+      ### Architecture Layer
+      **ODS_DK_OUT** - Aggregated data layer for reporting
+      
+      ### Transformation Logic
+      - Aggregates customer counts by customer_type and status
+      - Only includes active customers (fl_deleted = 0)
+      - Window functions for segment-level counts
+      
+      ### Refresh Cadence
+      Daily at 20:00 CET (full refresh)
+      
+      ### Downstream Consumers
+      - Executive Dashboard
+      - Campaign Analytics
+      - Customer Analytics Platform
+      
+    config:
+      tags: ['mart', 'customer', 'summary', 'ods_dk_out', 'marketing_domain']
+      materialized: table
+      cluster_by: ['customer_id']
+      
+    meta:
+      owner: denmark_data_team
+      steward: customer_domain_team
+      domain: customer
+      market: DK
+      architectural_layer: ods_dk_out
+      pii_contains: false
+      gdpr_scope: false
+      retention_years: 7
+      refresh_cadence: "daily_20:00_CET"
+      data_classification: internal
+      sla_hours: 4
+      criticality: medium
+      downstream_consumers: "Executive Dashboard, Campaign Analytics"
+      
     columns:
       - name: customer_id
+        description: Customer identifier
         tests:
           - not_null
+        meta:
+          key_type: BK
+          pii: false
+          
       - name: market_code
+        description: Market identifier (DK)
+        tests:
+          - accepted_values:
+              values: ['DK']
+        meta:
+          pii: false
+          
       - name: customer_type
+        description: Customer category (INDIVIDUAL, CORPORATE, SMALL_BUSINESS)
+        tests:
+          - accepted_values:
+              values: ['INDIVIDUAL', 'CORPORATE', 'SMALL_BUSINESS']
+        meta:
+          pii: false
+          
       - name: status
+        description: Customer status (ACTIVE, INACTIVE, SUSPENDED, PENDING)
+        tests:
+          - accepted_values:
+              values: ['ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING']
+        meta:
+          pii: false
+          
       - name: customers_in_segment
+        description: Count of customers in the same customer_type and status segment
+        data_type: NUMBER
+        meta:
+          pii: false
+          aggregation: count
+          
+      - name: loaded_at
+        description: Load timestamp
         tests:
           - not_null
-      - name: loaded_at
+        meta:
+          pii: false

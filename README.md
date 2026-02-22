@@ -1,178 +1,389 @@
-# ODS_DK_DBT
+# ODS_DK_DBT - Enterprise Data Platform for Denmark Market
 
-A DBT data platform for the ODS DK (Operational Data Store Denmark) project. This project is designed specifically for the Denmark market.
+[![dbt](https://img.shields.io/badge/dbt-1.7+-blue.svg)](https://www.getdbt.com/)
+[![Snowflake](https://img.shields.io/badge/Snowflake-Data%20Cloud-29B5E8.svg)](https://www.snowflake.com/)
+[![Market](https://img.shields.io/badge/Market-Denmark%20(DK)-green.svg)](https://en.wikipedia.org/wiki/Denmark)
 
-## Project Overview
+## Executive Summary
 
-### Architecture
+This DBT project implements an enterprise-grade data transformation pipeline for the Denmark (DK) market, transforming raw operational data into business-ready analytics tables. The platform supports critical business functions including campaign management, customer onboarding, revenue analytics, and regulatory compliance.
+
+---
+
+## Architecture Overview
+
+### Layered Architecture
 
 ```
-ODS IN (Source Tables) → DBT Transformation → ODS OUT (Mart Tables)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           DATA FLOW ARCHITECTURE                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                │
+│  │   IDMC       │     │  ODS_DK_IN   │     │  ODS_DK_OUT  │                │
+│  │   Source     │────▶│  Raw Layer   │────▶│  Transform   │                │
+│  │   Systems    │     │              │     │  Layer       │                │
+│  └──────────────┘     └──────────────┘     └──────────────┘                │
+│                              │                      │                       │
+│                              │                      ▼                       │
+│                              │           ┌──────────────────┐              │
+│                              │           │  Business Views  │              │
+│                              │           │  (Future Layer)  │              │
+│                              │           └──────────────────┘              │
+│                              │                      │                       │
+│                              ▼                      ▼                       │
+│                    ┌─────────────────────────────────────┐                 │
+│                    │        DOWNSTREAM CONSUMERS         │                 │
+│                    │  ┌─────────┐ ┌─────────┐ ┌───────┐ │                 │
+│                    │  │Campaign │ │Onboard- │ │Revenue│ │                 │
+│                    │  │Mgmt     │ │ing      │ │Analytics│                 │
+│                    │  └─────────┘ └─────────┘ └───────┘ │                 │
+│                    └─────────────────────────────────────┘                 │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Source Tables:**
-- **Customer Domain**: customer, address, email, phone, personal_information
-- **Contract Domain**: insurance_contract, vehicle_contract, service_contract, retail_finance, commercial_finance
+### Schema Architecture
 
-**Output Tables:**
-- `customer_consolidated` - Joined customer data with SCD Type 1
-- `customer_summary` - Aggregated customer metrics
-- `contract_consolidated` - Combined contracts with SCD Type 1
-- `contract_summary` - Aggregated contract metrics
+| Layer | Schema | Purpose | Data Classification |
+|-------|--------|---------|---------------------|
+| **ODS_DK_IN** | Source | IDMC-ingested raw data | Internal |
+| **ODS_DK_OUT** | Transform | Standardized business tables | Confidential |
+| **Business Views** | Reporting | Consumer-specific views | By Use Case |
 
-### Key Features
+---
 
-1. **SCD Type 1 with Smart Soft Delete**
-   - Uses `pk_hash` as primary key for incremental updates
-   - Uses `row_hash` for change detection
-   - Soft delete only triggers when driver table primary key is missing
+## Data Domains
 
-2. **Smart Delete Logic**
-   - Customer: Deleted only when `pk_hash` missing from customer source
-   - Contract: Deleted only when `pk_hash` missing from ALL contract sources
-   - Missing enrichment data (email, phone, address) does NOT trigger deletion
+### Customer Domain
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CUSTOMER DOMAIN                               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌────────────┐    ┌────────────┐    ┌────────────┐            │
+│  │  customer  │    │  address   │    │   email    │            │
+│  │  (Driver)  │    │            │    │            │            │
+│  └─────┬──────┘    └─────┬──────┘    └─────┬──────┘            │
+│        │                 │                  │                    │
+│        │    ┌────────────┼──────────────────┤                    │
+│        │    │            │                  │                    │
+│        ▼    ▼            ▼                  ▼                    │
+│  ┌──────────────────────────────────────────────────┐           │
+│  │           customer_consolidated                   │           │
+│  │    (Customer 360 View - PII Protected)           │           │
+│  └──────────────────────┬───────────────────────────┘           │
+│                         │                                        │
+│                         ▼                                        │
+│  ┌──────────────────────────────────────────────────┐           │
+│  │             customer_summary                      │           │
+│  │    (Aggregated Metrics by Segment)               │           │
+│  └──────────────────────────────────────────────────┘           │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Contract Domain
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CONTRACT DOMAIN                               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐   │
+│  │ insurance  │ │  vehicle   │ │  service   │ │  retail    │   │
+│  │ _contract  │ │ _contract  │ │ _contract  │ │ _finance   │   │
+│  └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └─────┬──────┘   │
+│        │              │              │              │           │
+│        └──────────────┼──────────────┼──────────────┘           │
+│                       │              │                          │
+│  ┌────────────┐       │              │                          │
+│  │ commercial │       │              │                          │
+│  │ _finance   │       │              │                          │
+│  └─────┬──────┘       │              │                          │
+│        │              │              │                          │
+│        ▼              ▼              ▼                          │
+│  ┌──────────────────────────────────────────────────┐           │
+│  │           contract_consolidated                   │           │
+│  │    (Unified Contract Portfolio)                  │           │
+│  └──────────────────────┬───────────────────────────┘           │
+│                         │                                        │
+│                         ▼                                        │
+│  ┌──────────────────────────────────────────────────┐           │
+│  │             contract_summary                      │           │
+│  │    (Aggregated Metrics by Type/Status)           │           │
+│  └──────────────────────────────────────────────────┘           │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Data Quality Framework
+
+### Test Coverage
+
+| Test Type | Purpose | Coverage |
+|-----------|---------|----------|
+| `not_null` | Ensures required fields are populated | All PK, FK, and business keys |
+| `unique` | Ensures no duplicate records | All primary keys |
+| `accepted_values` | Ensures valid enum values | Status, type columns |
+| `relationships` | Ensures referential integrity | All foreign keys |
+| `freshness` | Ensures data timeliness | All source tables |
+
+### Data Quality Tests by Model
+
+```
+customer_consolidated:
+├── PK: pk_hash (unique, not_null)
+├── BK: customer_id (unique, not_null)
+├── FK: customer_id → source.customer.customer_id
+├── customer_type (accepted_values)
+├── status (accepted_values)
+├── gender (accepted_values)
+├── fl_deleted (accepted_values)
+└── loaded_at (not_null)
+
+contract_consolidated:
+├── PK: pk_hash (unique, not_null)
+├── BK: contract_id (not_null)
+├── FK: customer_id → customer_consolidated.customer_id
+├── contract_type (accepted_values)
+├── status (accepted_values)
+├── is_active (accepted_values)
+├── fl_deleted (accepted_values)
+└── loaded_at (not_null)
+```
+
+---
+
+## PII Data Classification
+
+### Data Classification Levels
+
+| Level | Description | Handling Requirements |
+|-------|-------------|----------------------|
+| **Public** | Non-sensitive, publicly available | No restrictions |
+| **Internal** | Internal business data | Access limited to employees |
+| **Confidential** | Sensitive business data | Need-to-know access |
+| **Restricted** | Highly sensitive PII | Encryption, audit logging |
+
+### PII Fields by Classification
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PII CLASSIFICATION                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  DIRECT IDENTIFIERS (Confidential)                              │
+│  ├── customer_name                                               │
+│  ├── street_address                                              │
+│  ├── email_address                                               │
+│  └── phone_number                                                │
+│                                                                  │
+│  SENSITIVE PII (Restricted)                                     │
+│  ├── date_of_birth                                               │
+│  └── national_id (CPR)                                          │
+│                                                                  │
+│  HANDLING REQUIREMENTS:                                          │
+│  - Encryption at rest and in transit                            │
+│  - Audit logging for all access                                 │
+│  - Masking in non-production environments                       │
+│  - GDPR data subject request support                            │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Data Lineage
+
+### End-to-End Lineage
+
+```
+Source Tables (ODS_DK_IN)          Models (ODS_DK_OUT)         Exposures
+─────────────────────────          ──────────────────          ─────────
+
+customer ─────────────────┐
+                          │
+address ──────────────────┼──▶ customer_consolidated ──┬──▶ Campaign Mgmt
+                          │                             │
+email ────────────────────┤                             ├──▶ Onboarding
+                          │                             │
+phone ────────────────────┤                             └──▶ Regulatory
+                          │
+personal_information ─────┘
+                          
+                          ┌──▶ customer_summary ──────────▶ Executive Dashboard
+                          │
+
+insurance_contract ───────┐
+                          │
+vehicle_contract ─────────┤
+                          │
+service_contract ─────────┼──▶ contract_consolidated ──┬──▶ Campaign Mgmt
+                          │                             │
+retail_finance ───────────┤                             ├──▶ Revenue Analytics
+                          │                             │
+commercial_finance ───────┘                             └──▶ Regulatory
+                          
+                          ┌──▶ contract_summary ──────────▶ Executive Dashboard
+                          │
+```
+
+---
+
+## Governance Metadata
+
+### Ownership Matrix
+
+| Domain | Data Steward | Technical Owner | Business Owner |
+|--------|--------------|-----------------|----------------|
+| Customer | Customer Domain Team | Data Engineering | DK Market Ops |
+| Contract | Contract Domain Team | Data Engineering | DK Market Ops |
+
+### Retention Policies
+
+| Data Type | Retention Period | Regulatory Basis |
+|-----------|------------------|------------------|
+| Customer PII | 7 years | Danish Financial Regulations |
+| Contract Data | 10 years | Danish Financial Regulations |
+| Audit Logs | 7 years | GDPR Compliance |
+
+### Refresh Schedule
+
+| Process | Schedule | SLA |
+|---------|----------|-----|
+| IDMC Data Load | Daily 20:00 CET | 2 hours |
+| DBT Transformation | Daily 22:00 CET | 4 hours |
+| Data Availability | Daily 06:00 CET | - |
+
+---
 
 ## Project Structure
 
 ```
 ods_dk_dbt/
 ├── dbt_project/
-│   ├── dbt_project.yml          # DBT project configuration
-│   ├── profiles.yml              # Snowflake connection profiles
+│   ├── dbt_project.yml          # Project configuration
+│   ├── profiles.yml              # Connection profiles
 │   ├── models/
-│   │   ├── sources/              # Source definitions by domain
-│   │   │   ├── _sources.yml
+│   │   ├── sources/              # Source definitions
+│   │   │   ├── _sources.yml      # Main source config
 │   │   │   ├── customer_sources.yml
 │   │   │   └── contract_sources.yml
-│   │   └── marts/                # Final output models
+│   │   └── marts/                # Business models
 │   │       ├── customer/
-│   │       └── contract/
+│   │       │   ├── _mart_customer__models.yml
+│   │       │   ├── customer_consolidated.sql
+│   │       │   └── customer_summary.sql
+│   │       ├── contract/
+│   │       │   ├── _mart_contract__models.yml
+│   │       │   ├── contract_consolidated.sql
+│   │       │   └── contract_summary.sql
+│   │       └── exposures.yml     # Downstream consumers
 │   └── macros/
-│       └── scd/                  # SCD and delete detection macros
+│       ├── scd/                  # SCD macros
+│       └── utils/                # Utility macros
 ├── config/
 │   └── markets/
-│       └── dk.yaml               # Denmark market configuration
+│       └── dk.yaml               # Denmark market config
 ├── scripts/
-│   ├── setup_environment.sh
-│   ├── run_dbt.sh
-│   └── deploy.sh
-├── plans/
-│   └── architecture_plan.md
-├── requirements.txt
+│   ├── run_dbt.sh                # DBT execution script
+│   └── deploy.sh                 # Deployment script
+├── docs/                          # GitHub Pages documentation
 └── README.md
 ```
+
+---
 
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.8+
-- DBT Core with Snowflake adapter
+- DBT Core 1.7+
 - Snowflake account with appropriate permissions
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd ods_dk_dbt
-   ```
-
-2. **Set up environment**
-   ```bash
-   ./scripts/setup_environment.sh
-   ```
-
-3. **Configure Snowflake credentials**
-   
-   Update `dbt_project/profiles.yml` or set environment variables:
-   ```bash
-   export SNOWFLAKE_ACCOUNT="your-account"
-   export SNOWFLAKE_USER="your-user"
-   export SNOWFLAKE_PASSWORD="your-password"
-   export SNOWFLAKE_WAREHOUSE="your-warehouse"
-   export SNOWFLAKE_ROLE="your-role"
-   ```
-
-4. **Test connection**
-   ```bash
-   cd dbt_project
-   dbt debug
-   ```
-
-### Running DBT
-
-**Run DBT:**
 ```bash
-./scripts/run_dbt.sh run
-```
+# Clone repository
+git clone https://github.com/yourusername/ods_dk_dbt.git
+cd ods_dk_dbt
 
-**Run tests:**
-```bash
-./scripts/run_dbt.sh test
-```
+# Install dependencies
+pip install -r requirements.txt
 
-**Generate documentation:**
-```bash
-./scripts/run_dbt.sh docs
-```
+# Configure profiles
+cp dbt_project/profiles.yml ~/.dbt/profiles.yml
+# Edit with your Snowflake credentials
 
-### Deployment
-
-**Deploy to development:**
-```bash
-./scripts/deploy.sh dev
-```
-
-**Deploy to production:**
-```bash
-./scripts/deploy.sh prod
-```
-
-## Soft Delete Logic
-
-### Customer Model
-
-| Scenario | Action |
-|----------|--------|
-| Customer `pk_hash` missing from source | `fl_deleted = 1` |
-| Email data missing | Keep customer, email = NULL |
-| Phone data missing | Keep customer, phone = NULL |
-| Address data missing | Keep customer, address = NULL |
-
-### Contract Model
-
-| Scenario | Action |
-|----------|--------|
-| Contract `pk_hash` missing from ALL sources | `fl_deleted = 1` |
-| Contract exists in any source | Keep active |
-
-## Data Quality
-
-The project includes comprehensive data quality tests:
-
-- Primary key uniqueness and not-null checks
-- Foreign key relationship validation
-- Accepted values for status fields
-- Data freshness monitoring
-
-Run all tests:
-```bash
+# Run DBT
+cd dbt_project
+dbt deps
+dbt run
 dbt test
 ```
 
-## Documentation
+### Generate Documentation
 
-- [Architecture Plan](plans/architecture_plan.md) - Detailed architecture documentation
-- DBT Docs: Run `dbt docs generate && dbt docs serve` to view model documentation
+```bash
+# Generate and serve documentation
+dbt docs generate
+dbt docs serve
 
-## Contributing
+# Or copy to docs folder for GitHub Pages
+cp target/*.html target/*.json ../docs/
+```
 
-1. Create a feature branch
-2. Make your changes
-3. Run tests: `dbt test`
-4. Submit a pull request
+---
+
+## Monitoring & Alerting
+
+### Freshness Monitoring
+
+| Source Table | Warn Threshold | Error Threshold |
+|--------------|----------------|-----------------|
+| All sources | 24 hours | 48 hours |
+
+### Data Quality Alerts
+
+- Test failures trigger warnings in logs
+- Critical test failures halt pipeline execution
+- Freshness violations trigger alerts to data team
+
+---
+
+## Security & Compliance
+
+### GDPR Compliance
+
+- **Data Subject Access**: Supported via regulatory_reporting exposure
+- **Right to Erasure**: Implemented via soft delete (fl_deleted flag)
+- **Data Minimization**: Only necessary PII fields collected
+- **Purpose Limitation**: Data used only for documented business purposes
+
+### Access Control
+
+- Role-based access via Snowflake
+- PII columns require elevated permissions
+- Audit logging enabled for all data access
+
+---
+
+## Support & Contacts
+
+| Team | Contact | Responsibility |
+|------|---------|----------------|
+| Data Engineering | data-engineering@company.com | Technical support |
+| Customer Domain | customer-domain@company.com | Customer data questions |
+| Contract Domain | contract-domain@company.com | Contract data questions |
+| Compliance | compliance@company.com | GDPR/regulatory questions |
+
+---
 
 ## License
 
-[Specify your license here]
+Internal use only. © 2024 Company Name. All rights reserved.

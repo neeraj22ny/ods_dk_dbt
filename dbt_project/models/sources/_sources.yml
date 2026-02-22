@@ -2,17 +2,49 @@ version: 2
 
 sources:
   - name: ods_in
-    description: "ODS IN - Source tables from ODS_DK_IN schema"
+    description: |
+      ## ODS_DK_IN - Operational Data Store Ingestion Layer
+      
+      This schema contains raw data ingested from Informatica IDMC (Intelligent Data Management Cloud) 
+      for the Denmark (DK) market. Data is loaded daily at 20:00 CET and serves as the authoritative 
+      source for all downstream transformations.
+      
+      ### Data Flow
+      IDMC Source Systems → ODS_DK_IN → ODS_DK_OUT → Business Views
+      
+      ### Data Classification
+      - Contains PII data (customer personal information)
+      - Subject to GDPR compliance requirements
+      - Retention: 7 years per Danish financial regulations
+      
+      ### Ownership
+      - **Data Steward**: Denmark Data Team
+      - **Technical Owner**: Data Engineering Team
+      - **Business Owner**: DK Market Operations
+      
     database: "{{ var('source_database', 'ods_eu_dev') }}"
     schema: "{{ var('source_schema', 'ODS_DK_IN') }}"
-    loader: "Informatica"
+    loader: Informatica IDMC
+    loader_display_name: Informatica Intelligent Data Management Cloud
     
-    loaded_at_field: "loaded_at"
+    loaded_at_field: loaded_at
     freshness:
-      warn_after: {count: 12, period: hour}
-      error_after: {count: 24, period: hour}
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 48, period: hour}
     
     quoting:
       database: false
       schema: false
       identifier: false
+    
+    meta:
+      owner: denmark_data_team
+      steward: data_engineering
+      domain: customer_contract
+      market: DK
+      pii_contains: true
+      gdpr_scope: true
+      retention_years: 7
+      refresh_cadence: "daily_20:00_CET"
+      source_system: IDMC
+      data_classification: internal

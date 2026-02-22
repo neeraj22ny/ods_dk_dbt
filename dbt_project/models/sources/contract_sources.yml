@@ -2,102 +2,674 @@ version: 2
 
 sources:
   - name: ods_in_contract
-    description: "Contract domain tables from ODS_DK_IN schema"
+    description: |
+      ## Contract Domain Source Tables
+      
+      Contract-related source tables from the ODS_DK_IN schema, ingested via Informatica IDMC.
+      These tables contain contract data across multiple product lines for the Denmark market.
+      
+      ### Business Purpose
+      - Contract portfolio analysis
+      - Revenue recognition and forecasting
+      - Customer lifetime value calculation
+      - Campaign targeting based on contract status
+      
+      ### Product Lines
+      - Insurance Contracts
+      - Vehicle Contracts
+      - Service Contracts
+      - Retail Finance
+      - Commercial Finance
+      
+      ### Downstream Consumers
+      - Campaign Management System
+      - Revenue Analytics Platform
+      - Risk Assessment System
+      - Customer Onboarding Application
+      
+      ### Data Quality Standards
+      - Primary key (pk_hash) must be unique and non-null
+      - All records must have loaded_at timestamp
+      - Contract dates must be valid (end_date >= start_date)
+      
     database: "{{ var('source_database', 'ods_eu_dev') }}"
     schema: "{{ var('source_schema', 'ODS_DK_IN') }}"
+    loader: Informatica IDMC
+    loaded_at_field: loaded_at
+    
+    freshness:
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 48, period: hour}
+    
+    meta:
+      owner: denmark_data_team
+      steward: contract_domain_team
+      domain: contract
+      market: DK
+      pii_contains: false
+      gdpr_scope: true
+      retention_years: 10
+      refresh_cadence: "daily_20:00_CET"
+      source_system: IDMC
+      data_classification: internal
+      architectural_layer: ods_dk_in
     
     tables:
       - name: insurance_contract
-        description: "Insurance contract data"
+        description: |
+          ## Insurance Contract Table
+          
+          Insurance policy contracts for the Denmark market.
+          
+          ### Business Purpose
+          Insurance product portfolio management and customer coverage analysis.
+          
+          ### Transformation Logic
+          - Contract type assigned as 'INSURANCE'
+          - Premium amount mapped to specific_value_1
+          - Coverage type mapped to specific_value_2
+          
+          ### Standardization Rules
+          - contract_value: Rounded to 2 decimal places
+          - status: Mapped to standard values
+          - dates: Validated for logical consistency
+          
+          ### Filtering Criteria
+          - Only non-deleted records (fl_deleted = 0) for active contracts
+          - All records retained for audit purposes
+          
+          ### Refresh Cadence
+          Daily at 20:00 CET via IDMC batch load
+          
+          ### Downstream Consumers
+          - contract_consolidated model
+          - contract_summary model
+          - Insurance analytics dashboards
+          
         columns:
           - name: pk_hash
+            description: |
+              **Primary Key - Surrogate Key Hash**
+              
+              MD5 hash of business key(s) for deduplication.
+            data_type: VARCHAR(32)
             tests:
               - unique
               - not_null
+            meta:
+              is_primary_key: true
+              key_type: PK
+              pii: false
+              derivation: MD5_HASH
+              
           - name: row_hash
+            description: Row hash for change detection
+            meta:
+              pii: false
+              purpose: change_detection
+              
           - name: contract_id
+            description: |
+              **Business Key - Contract Identifier**
+              
+              Unique identifier assigned by the policy administration system.
+            data_type: VARCHAR(20)
+            tests:
+              - not_null
+            meta:
+              is_business_key: true
+              key_type: BK
+              pii: false
+              
           - name: customer_id
+            description: |
+              **Foreign Key - Customer Reference**
+              
+              Links contract to customer master record.
+            data_type: VARCHAR(20)
+            tests:
+              - not_null
+            meta:
+              key_type: FK
+              references: customer.customer_id
+              pii: false
+              
           - name: contract_start_date
+            description: |
+              **Contract Start Date**
+              
+              Effective date of the insurance policy.
+            data_type: DATE
+            tests:
+              - not_null
+            meta:
+              pii: false
+              
           - name: contract_end_date
+            description: |
+              **Contract End Date**
+              
+              Expiration date of the insurance policy.
+              NULL for evergreen policies.
+            data_type: DATE
+            meta:
+              pii: false
+              
           - name: contract_value
+            description: |
+              **Contract Value**
+              
+              Total insured value or sum assured.
+            data_type: NUMBER(18,2)
+            tests:
+              - not_null
+            meta:
+              pii: false
+              currency: DKK
+              
           - name: premium_amount
+            description: |
+              **Premium Amount**
+              
+              Annual premium for the insurance policy.
+            data_type: NUMBER(18,2)
+            meta:
+              pii: false
+              currency: DKK
+              
           - name: coverage_type
+            description: |
+              **Coverage Type**
+              
+              Type of insurance coverage.
+              
+              | Value | Description |
+              |-------|-------------|
+              | LIFE | Life insurance |
+              | HEALTH | Health insurance |
+              | PROPERTY | Property insurance |
+              | AUTO | Auto insurance |
+              | TRAVEL | Travel insurance |
+            data_type: VARCHAR(50)
+            meta:
+              pii: false
+              
           - name: status
+            description: |
+              **Contract Status**
+              
+              Current status of the insurance contract.
+            data_type: VARCHAR(20)
+            tests:
+              - accepted_values:
+                  values: ['ACTIVE', 'INACTIVE', 'PENDING', 'CANCELLED', 'EXPIRED']
+            meta:
+              pii: false
+              
           - name: fl_deleted
+            description: Soft delete flag (0=active, 1=deleted)
+            data_type: NUMBER(1,0)
+            tests:
+              - accepted_values:
+                  values: [0, 1]
+            meta:
+              pii: false
+              
           - name: loaded_at
-      
+            description: Load timestamp
+            data_type: TIMESTAMP_NTZ
+            tests:
+              - not_null
+            meta:
+              pii: false
+              
+        meta:
+          layer: ods_dk_in
+          domain: contract
+          product_line: insurance
+          criticality: high
+          
       - name: vehicle_contract
-        description: "Vehicle contract data"
+        description: |
+          ## Vehicle Contract Table
+          
+          Vehicle financing and leasing contracts for the Denmark market.
+          
+          ### Business Purpose
+          Vehicle portfolio management and customer vehicle asset tracking.
+          
+          ### Transformation Logic
+          - Contract type assigned as 'VEHICLE'
+          - Monthly payment mapped to specific_value_1
+          - Vehicle type mapped to specific_value_2
+          
         columns:
           - name: pk_hash
+            description: Primary key hash
             tests:
               - unique
               - not_null
+            meta:
+              is_primary_key: true
+              key_type: PK
+              pii: false
+              
           - name: row_hash
+            description: Row hash for change detection
+            meta:
+              pii: false
+              
           - name: contract_id
+            description: Business key - contract identifier
+            tests:
+              - not_null
+            meta:
+              key_type: BK
+              pii: false
+              
           - name: customer_id
+            description: Foreign key to customer table
+            tests:
+              - not_null
+            meta:
+              key_type: FK
+              references: customer.customer_id
+              pii: false
+              
           - name: contract_start_date
+            description: Contract start date
+            tests:
+              - not_null
+            meta:
+              pii: false
+              
           - name: contract_end_date
+            description: Contract end date
+            meta:
+              pii: false
+              
           - name: contract_value
+            description: Total contract value (vehicle price)
+            tests:
+              - not_null
+            meta:
+              pii: false
+              currency: DKK
+              
           - name: monthly_payment
+            description: Monthly payment amount
+            meta:
+              pii: false
+              currency: DKK
+              
           - name: vehicle_type
+            description: |
+              Type of vehicle
+              
+              | Value | Description |
+              |-------|-------------|
+              | CAR | Passenger car |
+              | VAN | Commercial van |
+              | TRUCK | Truck |
+              | MOTORCYCLE | Motorcycle |
+            meta:
+              pii: false
+              
           - name: status
+            description: Contract status
+            tests:
+              - accepted_values:
+                  values: ['ACTIVE', 'INACTIVE', 'PENDING', 'CANCELLED', 'EXPIRED']
+            meta:
+              pii: false
+              
           - name: fl_deleted
+            description: Soft delete flag
+            tests:
+              - accepted_values:
+                  values: [0, 1]
+            meta:
+              pii: false
+              
           - name: loaded_at
-      
+            description: Load timestamp
+            tests:
+              - not_null
+            meta:
+              pii: false
+              
+        meta:
+          layer: ods_dk_in
+          domain: contract
+          product_line: vehicle
+          criticality: high
+          
       - name: service_contract
-        description: "Service contract data"
+        description: |
+          ## Service Contract Table
+          
+          Service and maintenance contracts for the Denmark market.
+          
+          ### Business Purpose
+          Service agreement management and recurring revenue tracking.
+          
+          ### Transformation Logic
+          - Contract type assigned as 'SERVICE'
+          - Service fee mapped to specific_value_1
+          - Service type mapped to specific_value_2
+          
         columns:
           - name: pk_hash
+            description: Primary key hash
             tests:
               - unique
               - not_null
+            meta:
+              is_primary_key: true
+              key_type: PK
+              pii: false
+              
           - name: row_hash
+            description: Row hash for change detection
+            meta:
+              pii: false
+              
           - name: contract_id
+            description: Business key - contract identifier
+            tests:
+              - not_null
+            meta:
+              key_type: BK
+              pii: false
+              
           - name: customer_id
+            description: Foreign key to customer table
+            tests:
+              - not_null
+            meta:
+              key_type: FK
+              references: customer.customer_id
+              pii: false
+              
           - name: contract_start_date
+            description: Contract start date
+            tests:
+              - not_null
+            meta:
+              pii: false
+              
           - name: contract_end_date
+            description: Contract end date
+            meta:
+              pii: false
+              
           - name: contract_value
+            description: Total contract value
+            tests:
+              - not_null
+            meta:
+              pii: false
+              currency: DKK
+              
           - name: service_fee
+            description: Monthly/annual service fee
+            meta:
+              pii: false
+              currency: DKK
+              
           - name: service_type
+            description: |
+              Type of service
+              
+              | Value | Description |
+              |-------|-------------|
+              | MAINTENANCE | Maintenance service |
+              | SUPPORT | Support service |
+              | SUBSCRIPTION | Subscription service |
+            meta:
+              pii: false
+              
           - name: status
+            description: Contract status
+            tests:
+              - accepted_values:
+                  values: ['ACTIVE', 'INACTIVE', 'PENDING', 'CANCELLED', 'EXPIRED']
+            meta:
+              pii: false
+              
           - name: fl_deleted
+            description: Soft delete flag
+            tests:
+              - accepted_values:
+                  values: [0, 1]
+            meta:
+              pii: false
+              
           - name: loaded_at
-      
+            description: Load timestamp
+            tests:
+              - not_null
+            meta:
+              pii: false
+              
+        meta:
+          layer: ods_dk_in
+          domain: contract
+          product_line: service
+          criticality: medium
+          
       - name: retail_finance
-        description: "Retail finance contract data"
+        description: |
+          ## Retail Finance Table
+          
+          Retail financing and loan contracts for individual customers.
+          
+          ### Business Purpose
+          Consumer lending portfolio management and credit risk analysis.
+          
+          ### Transformation Logic
+          - Contract type assigned as 'RETAIL_FINANCE'
+          - Interest rate mapped to specific_value_1
+          - Loan term mapped to specific_value_3
+          
         columns:
           - name: pk_hash
+            description: Primary key hash
             tests:
               - unique
               - not_null
+            meta:
+              is_primary_key: true
+              key_type: PK
+              pii: false
+              
           - name: row_hash
+            description: Row hash for change detection
+            meta:
+              pii: false
+              
           - name: contract_id
+            description: Business key - contract identifier
+            tests:
+              - not_null
+            meta:
+              key_type: BK
+              pii: false
+              
           - name: customer_id
+            description: Foreign key to customer table
+            tests:
+              - not_null
+            meta:
+              key_type: FK
+              references: customer.customer_id
+              pii: false
+              
           - name: contract_start_date
+            description: Contract start date
+            tests:
+              - not_null
+            meta:
+              pii: false
+              
           - name: contract_end_date
+            description: Contract maturity date
+            meta:
+              pii: false
+              
           - name: contract_value
+            description: Principal loan amount
+            tests:
+              - not_null
+            meta:
+              pii: false
+              currency: DKK
+              
           - name: interest_rate
+            description: Annual interest rate (percentage)
+            meta:
+              pii: false
+              unit: percentage
+              
           - name: loan_term_months
+            description: Loan term in months
+            meta:
+              pii: false
+              unit: months
+              
           - name: status
+            description: Contract status
+            tests:
+              - accepted_values:
+                  values: ['ACTIVE', 'INACTIVE', 'PENDING', 'CANCELLED', 'EXPIRED']
+            meta:
+              pii: false
+              
           - name: fl_deleted
+            description: Soft delete flag
+            tests:
+              - accepted_values:
+                  values: [0, 1]
+            meta:
+              pii: false
+              
           - name: loaded_at
-      
+            description: Load timestamp
+            tests:
+              - not_null
+            meta:
+              pii: false
+              
+        meta:
+          layer: ods_dk_in
+          domain: contract
+          product_line: retail_finance
+          criticality: high
+          
       - name: commercial_finance
-        description: "Commercial finance contract data"
+        description: |
+          ## Commercial Finance Table
+          
+          Commercial financing and credit facilities for business customers.
+          
+          ### Business Purpose
+          Commercial lending portfolio management and business credit analysis.
+          
+          ### Transformation Logic
+          - Contract type assigned as 'COMMERCIAL_FINANCE'
+          - Interest rate mapped to specific_value_1
+          - Facility limit mapped to specific_value_3
+          
         columns:
           - name: pk_hash
+            description: Primary key hash
             tests:
               - unique
               - not_null
+            meta:
+              is_primary_key: true
+              key_type: PK
+              pii: false
+              
           - name: row_hash
+            description: Row hash for change detection
+            meta:
+              pii: false
+              
           - name: contract_id
+            description: Business key - contract identifier
+            tests:
+              - not_null
+            meta:
+              key_type: BK
+              pii: false
+              
           - name: customer_id
+            description: Foreign key to customer table
+            tests:
+              - not_null
+            meta:
+              key_type: FK
+              references: customer.customer_id
+              pii: false
+              
           - name: contract_start_date
+            description: Facility start date
+            tests:
+              - not_null
+            meta:
+              pii: false
+              
           - name: contract_end_date
+            description: Facility maturity date
+            meta:
+              pii: false
+              
           - name: contract_value
+            description: Current utilization amount
+            tests:
+              - not_null
+            meta:
+              pii: false
+              currency: DKK
+              
           - name: interest_rate
+            description: Annual interest rate (percentage)
+            meta:
+              pii: false
+              unit: percentage
+              
           - name: facility_limit
+            description: Maximum credit limit
+            meta:
+              pii: false
+              currency: DKK
+              
           - name: status
+            description: Facility status
+            tests:
+              - accepted_values:
+                  values: ['ACTIVE', 'INACTIVE', 'PENDING', 'CANCELLED', 'EXPIRED']
+            meta:
+              pii: false
+              
           - name: fl_deleted
+            description: Soft delete flag
+            tests:
+              - accepted_values:
+                  values: [0, 1]
+            meta:
+              pii: false
+              
           - name: loaded_at
+            description: Load timestamp
+            tests:
+              - not_null
+            meta:
+              pii: false
+              
+        meta:
+          layer: ods_dk_in
+          domain: contract
+          product_line: commercial_finance
+          criticality: high

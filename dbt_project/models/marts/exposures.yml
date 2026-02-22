@@ -1,0 +1,208 @@
+version: 2
+
+exposures:
+  - name: campaign_management
+    description: |
+      ## Campaign Management System
+      
+      Marketing campaign targeting and execution platform that consumes customer and contract data
+      for campaign segmentation, targeting, and execution.
+      
+      ### Business Purpose
+      - Customer segmentation for marketing campaigns
+      - Target audience selection based on customer attributes
+      - Campaign performance tracking and analytics
+      
+      ### Data Requirements
+      - Customer contact information (email, phone)
+      - Customer demographics (type, status, registration date)
+      - Contract portfolio data for cross-selling campaigns
+      
+      ### Data Freshness SLA
+      Data must be available by 06:00 CET for daily campaign execution.
+      
+      ### Owner
+      Marketing Operations Team
+      
+    type: application
+    maturity: high
+    url: https://campaign.company.com
+    owner:
+      name: Marketing Operations Team
+      email: marketing-ops@company.com
+      
+    depends_on:
+      - ref('customer_consolidated')
+      - ref('customer_summary')
+      - ref('contract_consolidated')
+      - ref('contract_summary')
+      
+    meta:
+      department: marketing
+      business_critical: true
+      sla_hours: 10
+      refresh_cadence: "daily_06:00_CET"
+      
+  - name: customer_onboarding
+    description: |
+      ## Customer Onboarding Application
+      
+      Digital onboarding platform for new customer registration and verification.
+      Consumes customer data for identity verification and duplicate detection.
+      
+      ### Business Purpose
+      - New customer registration
+      - Identity verification
+      - Duplicate customer detection
+      - KYC (Know Your Customer) compliance
+      
+      ### Data Requirements
+      - Customer identification data (customer_id, national_id)
+      - Customer contact information for verification
+      - Customer status for onboarding state tracking
+      
+      ### Data Freshness SLA
+      Real-time data access required for onboarding verification.
+      
+      ### Owner
+      Customer Experience Team
+      
+    type: application
+    maturity: high
+    url: https://onboarding.company.com
+    owner:
+      name: Customer Experience Team
+      email: customer-experience@company.com
+      
+    depends_on:
+      - ref('customer_consolidated')
+      - ref('customer_summary')
+      
+    meta:
+      department: customer_operations
+      business_critical: true
+      sla_hours: 1
+      refresh_cadence: "real-time"
+      
+  - name: revenue_analytics
+    description: |
+      ## Revenue Analytics Platform
+      
+      Financial analytics platform for revenue recognition, forecasting, and reporting.
+      Consumes contract data for revenue analysis and customer value calculations.
+      
+      ### Business Purpose
+      - Revenue recognition and reporting
+      - Contract portfolio analysis
+      - Customer lifetime value calculation
+      - Financial forecasting
+      
+      ### Data Requirements
+      - Contract values and durations
+      - Contract status and active flags
+      - Customer-contract relationships
+      
+      ### Data Freshness SLA
+      Data must be available by 08:00 CET for daily financial reporting.
+      
+      ### Owner
+      Finance Analytics Team
+      
+    type: dashboard
+    maturity: high
+    url: https://revenue.company.com
+    owner:
+      name: Finance Analytics Team
+      email: finance-analytics@company.com
+      
+    depends_on:
+      - ref('contract_consolidated')
+      - ref('contract_summary')
+      - ref('customer_consolidated')
+      
+    meta:
+      department: finance
+      business_critical: true
+      sla_hours: 12
+      refresh_cadence: "daily_08:00_CET"
+      
+  - name: executive_dashboard
+    description: |
+      ## Executive Dashboard
+      
+      C-level executive dashboard for business KPIs and strategic metrics.
+      Provides aggregated views of customer and contract portfolios.
+      
+      ### Business Purpose
+      - Executive KPI monitoring
+      - Strategic decision support
+      - Business performance tracking
+      
+      ### Data Requirements
+      - Customer counts by segment
+      - Contract counts and values by type
+      - Trend analysis metrics
+      
+      ### Data Freshness SLA
+      Data must be available by 07:00 CET for morning executive review.
+      
+      ### Owner
+      Business Intelligence Team
+      
+    type: dashboard
+    maturity: high
+    url: https://executive.company.com
+    owner:
+      name: Business Intelligence Team
+      email: bi-team@company.com
+      
+    depends_on:
+      - ref('customer_summary')
+      - ref('contract_summary')
+      
+    meta:
+      department: executive
+      business_critical: true
+      sla_hours: 11
+      refresh_cadence: "daily_07:00_CET"
+      
+  - name: regulatory_reporting
+    description: |
+      ## Regulatory Reporting Platform
+      
+      Compliance platform for regulatory reporting including GDPR data subject requests
+      and financial regulatory submissions.
+      
+      ### Business Purpose
+      - GDPR compliance (data subject access requests)
+      - Financial regulatory reporting
+      - Audit trail maintenance
+      
+      ### Data Requirements
+      - Customer PII data for GDPR requests
+      - Contract data for financial reporting
+      - Soft delete tracking for audit trails
+      
+      ### Data Freshness SLA
+      Data must be available within 24 hours for regulatory compliance.
+      
+      ### Owner
+      Compliance Team
+      
+    type: application
+    maturity: high
+    url: https://compliance.company.com
+    owner:
+      name: Compliance Team
+      email: compliance@company.com
+      
+    depends_on:
+      - ref('customer_consolidated')
+      - ref('contract_consolidated')
+      
+    meta:
+      department: compliance
+      business_critical: true
+      sla_hours: 24
+      refresh_cadence: "daily"
+      gdpr_scope: true

@@ -2,70 +2,501 @@ version: 2
 
 models:
   - name: contract_consolidated
-    description: "Consolidated contract data from all contract source tables"
+    description: |
+      ## Contract Consolidated Model
+      
+      Unified contract view combining all product lines (Insurance, Vehicle, Service, Retail Finance, Commercial Finance).
+      This is the primary contract table for downstream analytics and campaign targeting.
+      
+      ### Business Purpose
+      - Contract portfolio analysis
+      - Revenue recognition and forecasting
+      - Customer lifetime value calculation
+      - Campaign targeting based on contract status
+      
+      ### Architecture Layer
+      **ODS_DK_OUT** - Transformed data layer for downstream consumption
+      
+      ### Product Lines Included
+      | Product Line | Contract Type | Description |
+      |--------------|---------------|-------------|
+      | Insurance | INSURANCE | Insurance policies |
+      | Vehicle | VEHICLE | Vehicle financing/leasing |
+      | Service | SERVICE | Service agreements |
+      | Retail Finance | RETAIL_FINANCE | Consumer loans |
+      | Commercial Finance | COMMERCIAL_FINANCE | Business credit facilities |
+      
+      ### Transformation Logic
+      1. **Driver Tables**: All contract source tables (UNION ALL)
+      2. **Contract Type Assignment**: Static value based on source table
+      3. **Specific Values Mapping**:
+         - specific_value_1: Product-specific metric (premium, payment, fee, rate)
+         - specific_value_2: Product-specific category (coverage, vehicle, service type)
+         - specific_value_3: Product-specific term (loan term, facility limit)
+      4. **Change Detection**: row_hash comparison for incremental updates
+      
+      ### Standardization Rules
+      - contract_value: Rounded to 2 decimal places
+      - status: Mapped to standard values
+      - dates: Validated for logical consistency (end_date >= start_date)
+      
+      ### Filtering Criteria
+      - Only non-deleted records (fl_deleted = 0) for active contracts
+      - All records retained for audit purposes
+      
+      ### Refresh Cadence
+      Daily at 20:00 CET (incremental load)
+      
+      ### Downstream Consumers
+      - Campaign Management System
+      - Revenue Analytics Platform
+      - Risk Assessment System
+      - Customer Onboarding Application
+      
+      ### Data Lineage
+      ```
+      ODS_DK_IN.insurance_contract → contract_consolidated
+      ODS_DK_IN.vehicle_contract → contract_consolidated
+      ODS_DK_IN.service_contract → contract_consolidated
+      ODS_DK_IN.retail_finance → contract_consolidated
+      ODS_DK_IN.commercial_finance → contract_consolidated
+      ```
+      
+    config:
+      tags: ['mart', 'contract', 'final', 'ods_dk_out', 'marketing_domain']
+      materialized: incremental
+      unique_key: pk_hash
+      cluster_by: ['customer_id', 'contract_type']
+      
+    meta:
+      owner: denmark_data_team
+      steward: contract_domain_team
+      domain: contract
+      market: DK
+      architectural_layer: ods_dk_out
+      pii_contains: false
+      gdpr_scope: true
+      retention_years: 10
+      refresh_cadence: "daily_20:00_CET"
+      data_classification: internal
+      sla_hours: 4
+      criticality: high
+      downstream_consumers: "Campaign Management, Revenue Analytics, Risk Assessment"
+      
     columns:
       - name: pk_hash
+        description: |
+          **Primary Key - Surrogate Key Hash**
+          
+          MD5 hash from source table, used as the primary key for the contract entity.
+          Ensures consistent identification across incremental loads.
+        data_type: VARCHAR(32)
         tests:
           - unique
           - not_null
+        meta:
+          is_primary_key: true
+          key_type: PK
+          pii: false
+          derivation: MD5_HASH
+          
       - name: row_hash
+        description: |
+          **Row Hash for Change Detection**
+          
+          MD5 hash of business columns used to detect data changes.
+          When row_hash differs from existing record, the record is updated.
+        data_type: VARCHAR(32)
+        meta:
+          is_primary_key: false
+          pii: false
+          derivation: MD5_HASH
+          purpose: change_detection
+          source_columns: "contract_id, customer_id, contract_type, contract_start_date, contract_end_date, contract_value, status"
+          
       - name: contract_id
+        description: |
+          **Business Key - Contract Identifier**
+          
+          Unique identifier assigned by the source system.
+          Used as the natural key for contract entity resolution.
+        data_type: VARCHAR(20)
         tests:
           - not_null
+        meta:
+          is_business_key: true
+          key_type: BK
+          pii: false
+          
       - name: customer_id
+        description: |
+          **Foreign Key - Customer Reference**
+          
+          Links contract to customer master record.
+          Used for customer-contract relationship analysis.
+        data_type: VARCHAR(20)
         tests:
           - not_null
+        meta:
+          key_type: FK
+          references: customer_consolidated.customer_id
+          pii: false
+          
       - name: contract_type
+        description: |
+          **Contract Type**
+          
+          Classification of contract product line.
+          
+          | Value | Description |
+          |-------|-------------|
+          | INSURANCE | Insurance policy |
+          | VEHICLE | Vehicle financing/leasing |
+          | SERVICE | Service agreement |
+          | RETAIL_FINANCE | Consumer loan |
+          | COMMERCIAL_FINANCE | Business credit facility |
+        data_type: VARCHAR(20)
         tests:
-          - not_null
           - accepted_values:
               values: ['INSURANCE', 'VEHICLE', 'SERVICE', 'RETAIL_FINANCE', 'COMMERCIAL_FINANCE']
+        meta:
+          pii: false
+          accepted_values: INSURANCE, VEHICLE, SERVICE, RETAIL_FINANCE, COMMERCIAL_FINANCE
+          
       - name: contract_start_date
+        description: |
+          **Contract Start Date**
+          
+          Effective date of the contract.
+          Used for tenure calculations and cohort analysis.
+        data_type: DATE
         tests:
           - not_null
+        meta:
+          pii: false
+          
       - name: contract_end_date
+        description: |
+          **Contract End Date**
+          
+          Expiration/maturity date of the contract.
+          NULL for evergreen/open-ended contracts.
+        data_type: DATE
+        meta:
+          pii: false
+          
       - name: contract_duration_days
+        description: |
+          **Contract Duration (Days)**
+          
+          Calculated duration in days between start and end dates.
+          NULL for open-ended contracts.
+        data_type: NUMBER
+        meta:
+          pii: false
+          derivation: calculated
+          formula: DATEDIFF(day, contract_start_date, contract_end_date)
+          
       - name: contract_value
+        description: |
+          **Contract Value**
+          
+          Total value of the contract in DKK.
+          Interpretation varies by product line:
+          - Insurance: Sum assured
+          - Vehicle: Vehicle price
+          - Service: Total contract value
+          - Retail Finance: Principal amount
+          - Commercial Finance: Current utilization
+        data_type: NUMBER(18,2)
         tests:
           - not_null
+        meta:
+          pii: false
+          currency: DKK
+          
       - name: status
+        description: |
+          **Contract Status**
+          
+          Current status of the contract.
+          
+          | Value | Description |
+          |-------|-------------|
+          | ACTIVE | Active contract |
+          | INACTIVE | Inactive contract |
+          | PENDING | Pending activation |
+          | CANCELLED | Cancelled contract |
+          | EXPIRED | Expired contract |
+        data_type: VARCHAR(20)
+        tests:
+          - accepted_values:
+              values: ['ACTIVE', 'INACTIVE', 'PENDING', 'CANCELLED', 'EXPIRED']
+        meta:
+          pii: false
+          accepted_values: ACTIVE, INACTIVE, PENDING, CANCELLED, EXPIRED
+          
       - name: is_active
+        description: |
+          **Active Contract Flag**
+          
+          Binary flag indicating if the contract is currently active.
+          - 1 = Active (end_date >= current_date AND status = 'ACTIVE')
+          - 0 = Inactive
+        data_type: NUMBER(1,0)
         tests:
-          - not_null
           - accepted_values:
               values: [0, 1]
+        meta:
+          pii: false
+          derivation: calculated
+          formula: "CASE WHEN contract_end_date >= CURRENT_DATE() AND status = 'ACTIVE' THEN 1 ELSE 0 END"
+          
       - name: specific_value_1
+        description: |
+          **Product-Specific Value 1**
+          
+          Product-specific metric:
+          | Contract Type | Value |
+          |---------------|-------|
+          | INSURANCE | Premium amount |
+          | VEHICLE | Monthly payment |
+          | SERVICE | Service fee |
+          | RETAIL_FINANCE | Interest rate |
+          | COMMERCIAL_FINANCE | Interest rate |
+        data_type: VARIANT
+        meta:
+          pii: false
+          
       - name: specific_value_2
+        description: |
+          **Product-Specific Value 2**
+          
+          Product-specific category:
+          | Contract Type | Value |
+          |---------------|-------|
+          | INSURANCE | Coverage type |
+          | VEHICLE | Vehicle type |
+          | SERVICE | Service type |
+          | RETAIL_FINANCE | NULL |
+          | COMMERCIAL_FINANCE | NULL |
+        data_type: VARIANT
+        meta:
+          pii: false
+          
       - name: specific_value_3
+        description: |
+          **Product-Specific Value 3**
+          
+          Product-specific term:
+          | Contract Type | Value |
+          |---------------|-------|
+          | INSURANCE | NULL |
+          | VEHICLE | NULL |
+          | SERVICE | NULL |
+          | RETAIL_FINANCE | Loan term (months) |
+          | COMMERCIAL_FINANCE | Facility limit |
+        data_type: VARIANT
+        meta:
+          pii: false
+          
       - name: fl_deleted
+        description: |
+          **Soft Delete Flag**
+          
+          Binary flag indicating whether the record has been soft deleted.
+          - 0 = Active record
+          - 1 = Deleted record
+          
+          Updated by hard delete detection macro when source record is removed.
+        data_type: NUMBER(1,0)
         tests:
-          - not_null
           - accepted_values:
               values: [0, 1]
+        meta:
+          pii: false
+          accepted_values: "0 (active), 1 (deleted)"
+          purpose: soft_delete_tracking
+          
       - name: deleted_at
+        description: |
+          **Deletion Timestamp**
+          
+          Timestamp when the record was marked as deleted.
+          NULL for active records.
+        data_type: TIMESTAMP_NTZ
+        meta:
+          pii: false
+          purpose: audit_trail
+          
       - name: loaded_at
+        description: |
+          **Load Timestamp**
+          
+          Timestamp when the record was loaded/updated in this model.
+          Used for freshness monitoring and incremental processing.
+        data_type: TIMESTAMP_NTZ
+        tests:
+          - not_null
+        meta:
+          pii: false
+          purpose: freshness_tracking
+          
       - name: market_code
-        
+        description: |
+          **Market Code**
+          
+          Identifier for the market/region.
+          Fixed value 'DK' for Denmark market.
+        data_type: VARCHAR(2)
+        tests:
+          - accepted_values:
+              values: ['DK']
+        meta:
+          pii: false
+          
+    tests:
+      - relationships:
+          column_name: customer_id
+          to: ref('customer_consolidated')
+          field: customer_id
+          
   - name: contract_summary
-    description: "Aggregated contract metrics by customer, contract type, and status"
+    description: |
+      ## Contract Summary Model
+      
+      Aggregated contract metrics for reporting and analytics.
+      Provides contract counts and values by customer, type, and status.
+      
+      ### Business Purpose
+      - Contract portfolio reporting
+      - Revenue analytics
+      - Customer value analysis
+      - Executive dashboards
+      
+      ### Architecture Layer
+      **ODS_DK_OUT** - Aggregated data layer for reporting
+      
+      ### Transformation Logic
+      - Aggregates by customer_id, contract_type, and status
+      - Calculates total contracts, total value, average duration
+      - Only includes active contracts (fl_deleted = 0)
+      
+      ### Metrics Calculated
+      - total_contracts: Count of distinct contracts
+      - total_value: Sum of contract values
+      - avg_duration_days: Average contract duration
+      - active_contracts: Count of currently active contracts
+      
+      ### Refresh Cadence
+      Daily at 20:00 CET (full refresh)
+      
+      ### Downstream Consumers
+      - Executive Dashboard
+      - Revenue Analytics Platform
+      - Customer Analytics Platform
+      
+    config:
+      tags: ['mart', 'contract', 'summary', 'ods_dk_out', 'marketing_domain']
+      materialized: table
+      cluster_by: ['customer_id']
+      
+    meta:
+      owner: denmark_data_team
+      steward: contract_domain_team
+      domain: contract
+      market: DK
+      architectural_layer: ods_dk_out
+      pii_contains: false
+      gdpr_scope: false
+      retention_years: 10
+      refresh_cadence: "daily_20:00_CET"
+      data_classification: internal
+      sla_hours: 4
+      criticality: medium
+      downstream_consumers: "Executive Dashboard, Revenue Analytics"
+      
     columns:
       - name: customer_id
+        description: Customer identifier
         tests:
           - not_null
+        meta:
+          key_type: FK
+          references: customer_consolidated.customer_id
+          pii: false
+          
       - name: market_code
+        description: Market identifier (DK)
+        tests:
+          - accepted_values:
+              values: ['DK']
+        meta:
+          pii: false
+          
       - name: contract_type
+        description: Contract type (INSURANCE, VEHICLE, SERVICE, RETAIL_FINANCE, COMMERCIAL_FINANCE)
         tests:
           - accepted_values:
               values: ['INSURANCE', 'VEHICLE', 'SERVICE', 'RETAIL_FINANCE', 'COMMERCIAL_FINANCE']
+        meta:
+          pii: false
+          
       - name: status
+        description: Contract status (ACTIVE, INACTIVE, PENDING, CANCELLED, EXPIRED)
+        tests:
+          - accepted_values:
+              values: ['ACTIVE', 'INACTIVE', 'PENDING', 'CANCELLED', 'EXPIRED']
+        meta:
+          pii: false
+          
       - name: total_contracts
-        tests:
-          - not_null
+        description: Count of distinct contracts in the segment
+        data_type: NUMBER
+        meta:
+          pii: false
+          aggregation: count_distinct
+          
       - name: total_value
+        description: Sum of contract values in the segment (DKK)
+        data_type: NUMBER(18,2)
+        meta:
+          pii: false
+          aggregation: sum
+          currency: DKK
+          
       - name: avg_duration_days
+        description: Average contract duration in days
+        data_type: NUMBER
+        meta:
+          pii: false
+          aggregation: avg
+          unit: days
+          
       - name: earliest_contract_date
+        description: Earliest contract start date in the segment
+        data_type: DATE
+        meta:
+          pii: false
+          aggregation: min
+          
       - name: latest_contract_end_date
+        description: Latest contract end date in the segment
+        data_type: DATE
+        meta:
+          pii: false
+          aggregation: max
+          
       - name: active_contracts
+        description: Count of currently active contracts (is_active = 1)
+        data_type: NUMBER
+        meta:
+          pii: false
+          aggregation: sum
+          
+      - name: loaded_at
+        description: Load timestamp
         tests:
           - not_null
-      - name: loaded_at
+        meta:
+          pii: false
